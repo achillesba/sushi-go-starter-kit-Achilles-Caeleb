@@ -30,6 +30,14 @@ Replace `<game_id>` with the game ID shown in the web UI or given to you by the 
 
 ## Running a Test Server
 
+First, load the server image from the LAN:
+
+```bash
+curl http://joes-macbook.local:9090/sushi-go-test.tar | docker load
+```
+
+Then start it:
+
 ```bash
 docker run -p 7878:7878 -p 8080:8080 sushi-go-test
 ```
