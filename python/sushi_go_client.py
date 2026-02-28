@@ -163,6 +163,29 @@ class SushiGoClient:
                     c in ("Egg Nigiri", "Salmon Nigiri", "Squid Nigiri")
                     for c in self.state.played_cards
                 )
+    def have_wasabi_and_nigiri(self, hand: list[str]) -> bool:
+        """Check if hand has wasabi and at least one nigiri."""
+        
+        if "Wasabi" in hand and "Squid Nigiri" in hand:
+            return hand.index("Wasabi") and hand.index("Squid Nigiri")
+        if "Wasabi" in hand and "Salmon Nigiri" in hand:
+            return hand.index("Wasabi") and hand.index("Salmon Nigiri")
+        if "Wasabi" in hand and "Egg Nigiri" in hand:
+            return hand.index("Wasabi") and hand.index("Egg Nigiri")
+        return False
+
+    def have_set(self, hand: list[str]) -> bool:
+        """Check if hand has at least count of card_name."""
+        has_set = []
+        set_cards = ["Tempura", "Sashimi", "Dumpling"]
+        for card in set_cards:
+            for i in range(len(hand)):
+                if hand[i] == card:
+                    count += 1
+            if count >= 2:
+                has_set.append(card)
+        return has_set
+
 
     def choose_card(self, hand: list[str]) -> int:
         """
@@ -211,14 +234,28 @@ class SushiGoClient:
         if self.state and not self.state.has_unused_wasabi and "Wasabi" in hand and len(hand) > 3:
             return hand.index("Wasabi")
 
-        if self.state and not self.state.has_chopsticks and "Chopsticks" in hand and len(hand) > 2:
+        if self.state and not self.state.has_chopsticks and "Chopsticks" in hand and len(hand) > 3:
             return hand.index("Chopsticks")
  
-        # If we have wasabi, prioritize nigiri
-        if self.state and self.state.has_unused_wasabi:
+        # If we have wasabi, prioritize good nigiri if larger hand 
+        if self.state and self.state.has_unused_wasabi and len(hand) > 5:
+            for nigiri in ["Squid Nigiri", "Salmon Nigiri"]:
+                if nigiri in hand:
+                    return hand.index(nigiri)
+                
+        if self.state and self.state.has_unused_wasabi and len(hand) < 5:
             for nigiri in ["Squid Nigiri", "Salmon Nigiri", "Egg Nigiri"]:
                 if nigiri in hand:
                     return hand.index(nigiri)
+                
+        if self.state and self.state.has_chopsticks:
+            if self.have_wasabi_and_nigiri(hand):
+                playing = self.have_wasabi_and_nigiri(hand)
+                return playing
+            elif self.have_set(hand):
+                playing = self.have_set(hand)
+                return playing
+
 
         # Otherwise use priority list
         for card in priority:
