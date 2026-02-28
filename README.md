@@ -33,7 +33,7 @@ Replace `<game_id>` with the game ID shown in the web UI or given to you by the 
 First, load the server image from the LAN:
 
 ```bash
-curl http://joes-macbook.local:9090/sushi-go-test.tar | docker load
+curl https://joes-macbook.tail10906.ts.net/sushi-go-test.tar | docker load
 ```
 
 Then start it:
