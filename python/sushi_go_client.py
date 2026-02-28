@@ -45,6 +45,14 @@ class GameState:
     hand: list[str]
     round: int = 1
     turn: int = 1
+    P2_game_id: str = None
+    P3_game_id: str = None
+    P4_game_id: str = None  
+    P5_game_id: str = None
+    P2_played_cards: list[str] = None
+    P3_played_cards: list[str] = None
+    P4_played_cards: list[str] = None
+    P5_played_cards: list[str] = None
     played_cards: list[str] = None
     has_chopsticks: bool = False
     has_unused_wasabi: bool = False
@@ -168,7 +176,7 @@ class SushiGoClient:
 
         Returns:
             Index of the card to play (0-based)
-        """
+        
         # Simple priority-based strategy
         priority = [
             "Squid Nigiri",  # 3 points, or 9 with wasabi
@@ -185,6 +193,27 @@ class SushiGoClient:
             "Chopsticks",  # Play 2 cards next turn
         ]
 
+
+        priority = ["",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",]
+
+        """
+        if self.state and not self.state.has_unused_wasabi and "Wasabi" in hand and len(hand) > 3:
+            return hand.index("Wasabi")
+
+        if self.state and not self.state.has_chopsticks and "Chopsticks" in hand and len(hand) > 2:
+            return hand.index("Chopsticks")
+ 
         # If we have wasabi, prioritize nigiri
         if self.state and self.state.has_unused_wasabi:
             for nigiri in ["Squid Nigiri", "Salmon Nigiri", "Egg Nigiri"]:
@@ -198,6 +227,10 @@ class SushiGoClient:
 
         # Fallback: random
         return random.randint(0, len(hand) - 1)
+
+
+
+
 
     def handle_message(self, message: str):
         """Handle a message from the server."""
