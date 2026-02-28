@@ -43,6 +43,7 @@ class GameState:
     game_id: str
     player_id: int
     hand: list[str]
+    starting_hand_size: int = 0
     round: int = 1
     turn: int = 1
     P2_game_id: str = None
@@ -53,10 +54,10 @@ class GameState:
     P3_played_cards: list[str] = None
     P4_played_cards: list[str] = None
     P5_played_cards: list[str] = None
-    played_cards: list[str] = None
+    played_cards: list[str] = None 
+    important_cards = {"Dumpling": 0, "Sashimi": 0, "Tempura": 0, "Pudding": 0}
     has_chopsticks: bool = False
     has_unused_wasabi: bool = False
-    puddings: int = 0
 
     def __post_init__(self):
         if self.played_cards is None:
@@ -139,12 +140,12 @@ class SushiGoClient:
     def play_card(self, card_index: int):
         """Play a card by index."""
         self.send(f"PLAY {card_index}")
-        return self.receive()
+        # REMOVED the return self.receive() here
 
     def play_chopsticks(self, index1: int, index2: int):
         """Use chopsticks to play two cards."""
         self.send(f"CHOPSTICKS {index1} {index2}")
-        return self.receive()
+        # REMOVED the return self.receive() here
 
     def parse_hand(self, message: str):
         """Parse a HAND message and update state."""
@@ -154,7 +155,14 @@ class SushiGoClient:
             for match in re.finditer(r"(\d+):(.*?)(?=\s\d+:|$)", payload):
                 cards.append(match.group(2).strip())
             if self.state:
+                # DETECT NEW ROUND: If the incoming hand is bigger than our current hand, clear the table!
+                if len(cards) > len(self.state.hand):
+                    self.state.played_cards = []
+                    # Also reset important cards so we don't refuse to draft Dumplings in Round 2
+                    self.state.important_cards = {"Dumpling": 0, "Sashimi": 0, "Tempura": 0, "Pudding": self.state.important_cards.get("Pudding", 0)}
+                    
                 self.state.hand = cards
+                
                 # Update chopsticks/wasabi tracking based on played cards
                 self.state.has_chopsticks = "Chopsticks" in self.state.played_cards
                 self.state.has_unused_wasabi = any(
@@ -163,6 +171,7 @@ class SushiGoClient:
                     c in ("Egg Nigiri", "Salmon Nigiri", "Squid Nigiri")
                     for c in self.state.played_cards
                 )
+    
     def have_wasabi_and_nigiri(self, hand: list[str]):
         """Check if hand has wasabi and at least one nigiri."""
         
@@ -180,8 +189,9 @@ class SushiGoClient:
     def have_set(self, hand: list[str]):
         """Check if hand has at least count of card_name."""
         has_set = []
-        set_cards = ["Tempura", "Sashimi", "Dumpling"]
+        set_cards = ["Dumpling", "Sashimi", "Tempura"]
         for card in set_cards:
+            count = 0
             for i in range(len(hand)):
                 if hand[i] == card:
                     count += 1
@@ -234,26 +244,85 @@ class SushiGoClient:
                     "",]
 
         """
-        if self.state and not self.state.has_unused_wasabi and "Wasabi" in hand and len(hand) > 3:
+         
+
+        if self.state and not self.state.has_unused_wasabi and "Wasabi" in hand and len(hand) > 5:
             return hand.index("Wasabi")
 
-        if self.state and not self.state.has_chopsticks and "Chopsticks" in hand and len(hand) > 2:
+        if self.state and not self.state.has_chopsticks and "Chopsticks" in hand and len(hand) > 5:
             return hand.index("Chopsticks")
  
-        # If we have wasabi, prioritize nigiri
-        if self.state and self.state.has_unused_wasabi:
+        # If we have wasabi, prioritize good nigiri if larger hand 
+        if self.state and self.state.has_unused_wasabi and len(hand) > 5:
+            for nigiri in ["Squid Nigiri", "Salmon Nigiri"]:
+                if nigiri in hand:
+                    self.state.has_unused_wasabi = False
+                    return hand.index(nigiri)
+                
+        if self.state and self.state.has_unused_wasabi and len(hand) <= 5:
             for nigiri in ["Squid Nigiri", "Salmon Nigiri", "Egg Nigiri"]:
                 if nigiri in hand:
+                    self.state.has_unused_wasabi = False
                     return hand.index(nigiri)
                 
         if self.state and self.state.has_chopsticks:
+            Tempura_indexes = [i for i, card in enumerate(hand) if card == "Tempura"]
+            Sahimi_indexes = [i for i, card in enumerate(hand) if card == "Sashimi"]
+            Dumpling_indexes = [i for i, card in enumerate(hand) if card == "Dumpling"]
             if self.have_wasabi_and_nigiri(hand):
                 playing = self.have_wasabi_and_nigiri(hand)
                 if len(playing) == 2:
                     return playing
+            if self.have_set(hand):
+                playing = self.have_set(hand)
+                if len(playing) > 0:
+                    for name in playing:
+                        if name == "Dumpling" and self.state.important_cards["Dumpling"] <= 3:
+                            if self.state.important_cards["Dumpling"] == 0 and len(self.state.hand) > (self.state.starting_hand_size)/2:
+                                continue
+                            self.state.important_cards["Dumpling"] += 2
+                            self.state.has_chopsticks = False
+                            return Dumpling_indexes[:2]
+                        if name == "Sashimi" and self.state.important_cards["Sashimi"] == 0 and len(self.state.hand) > 2*((self.state.starting_hand_size)/3):
+                            self.state.important_cards["Sashimi"] += 2
+                            self.state.has_chopsticks = False
+                            return Sahimi_indexes[:2]
+                        if name == "Tempura":
+                            self.state.important_cards["Tempura"] += 2
+                            self.state.has_chopsticks = False
+                            return Tempura_indexes[:2]
+                            
+        if "Dumpling" in hand and self.state and self.state.important_cards["Dumpling"] <= 4:
+            if self.state.important_cards["Dumpling"] == 0 and len(self.state.hand) > (self.state.starting_hand_size)/2:
+                pass
+            else:
+                self.state.important_cards["Dumpling"] += 1
+                return hand.index("Dumpling")
+        if "Sashimi" in hand and self.state and self.state.important_cards["Sashimi"] == 2:
+            self.state.important_cards["Sashimi"] += 1
+            return hand.index("Sashimi")
+        if "Tempura" in hand and self.state and len(self.state.hand) >= (self.state.starting_hand_size)/2:
+            self.state.important_cards["Tempura"] += 1
+            if (self.state.important_cards["Tempura"])%2 == 0 and len(self.state.hand) < 4:
+                pass
+            else:  
+                return hand.index("Tempura")
+        
+        priority = [
+            "Squid Nigiri",
+            "Salmon Nigiri",
+            "Egg Nigiri",
+            "Maki Roll (3)",
+            "Maki Roll (2)",
+            "Maki Roll (1)",
+            "Pudding"
+            ]
 
-        # Otherwise use priority list
-
+        for card in priority:
+            if card in hand:
+                if card == "Pudding":
+                    self.state.important_cards["Pudding"] += 1
+                return hand.index(card)
 
         # Fallback: random
         return random.randint(0, len(hand) - 1)
@@ -295,17 +364,21 @@ class SushiGoClient:
 
         card_index = self.choose_card(self.state.hand)
 
-        # Track the card we're about to play
-        played_card = self.state.hand[card_index]
-        if card_index.type() == int:
-            response = self.play_card(card_index)
-
-        if card_index.type() == list:
-            response = self.play_chopsticks(card_index[0], card_index[1])
-
-        if response.startswith("OK"):
-            if self.state:
-                self.state.played_cards.append(played_card)
+        if type(card_index) == list:
+            # Handle Chopsticks (two cards)
+            self.play_chopsticks(card_index[0], card_index[1])
+            
+            # Immediately update local state
+            self.state.played_cards.extend([self.state.hand[card_index[0]], self.state.hand[card_index[1]]])
+            if "Chopsticks" in self.state.played_cards:
+                self.state.played_cards.remove("Chopsticks")
+            self.state.has_chopsticks = False
+        else:
+            # Handle standard single card play
+            self.play_card(card_index)
+            
+            # Immediately update local state
+            self.state.played_cards.append(self.state.hand[card_index])
 
     def run(self, game_id: str, player_name: str):
         """Main game loop."""
@@ -320,6 +393,8 @@ class SushiGoClient:
 
             # Main game loop
             running = True
+            self.state.starting_hand_size = len(self.state.hand)
+            self.state.important_cards = {"Dumpling": 0, "Sashimi": 0, "Tempura": 0, "Pudding": 0}
             while running:
                 # Check for incoming messages
                 message = self.receive()
